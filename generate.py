@@ -143,7 +143,6 @@ class CrosswordCreator():
 
 
         while len(queue) > 0:
-            print(queue[0])
             x, y = queue.pop(0)
             if self.revise(x, y):
                 if len(self.domains[x]) == 0:
@@ -182,6 +181,7 @@ class CrosswordCreator():
                         i, j = self.crossword.overlaps[var, neighbor]
                         if word[i] != neighbor_word[j]:
                             return False
+        return True
 
     def order_domain_values(self, var, assignment):
         """
@@ -215,12 +215,19 @@ class CrosswordCreator():
 
         If no assignment is possible, return None.
         """
-        if self.assignment_complete():
+        if self.assignment_complete(assignment):
             return assignment
         
         var = self.select_unassigned_variable(assignment)
-        
-
+        for val in self.order_domain_values(var, assignment):
+          new_assignment = assignment.copy()
+          new_assignment[var] = val
+          if self.consistent(new_assignment):
+            res = self.backtrack(new_assignment)
+            if res:
+              return res
+              
+        return None
 
 def main():
 
