@@ -1,4 +1,7 @@
+from audioop import reverse
+from secrets import choice
 import sys
+from threading import currentThread
 
 from crossword import *
 
@@ -121,7 +124,8 @@ class CrosswordCreator():
 
             if overlap:
                 x_overlap = word[overlap[0]]
-                y_overlaps = set(y_word[overlap[1]] for y_word in self.domains[y])
+                y_overlaps = set(y_word[overlap[1]]
+                                 for y_word in self.domains[y])
 
                 if x_overlap not in y_overlaps:
                     self.domains[x].remove(word)
@@ -141,9 +145,8 @@ class CrosswordCreator():
 
         queue = arcs or list(self.crossword.overlaps.keys())
 
-
         while len(queue) > 0:
-            x, y = queue.pop(0)
+            x, y = queue.pop()
             if self.revise(x, y):
                 if len(self.domains[x]) == 0:
                     return False
@@ -172,7 +175,7 @@ class CrosswordCreator():
         for var, word in assignment.items():
             if var not in self.crossword.variables:
                 return False
-            
+
             neighbors = self.crossword.neighbors(var)
             if neighbors:
                 for neighbor in neighbors:
@@ -183,6 +186,22 @@ class CrosswordCreator():
                             return False
         return True
 
+    def get_constraint(self, value, variable, assignment):
+        """
+        Gets the number of choices eliminated in `variable`'s neighbors 
+        by choosing `value` from the domain of `variable`
+        """
+        neighbors = self.crossword.neighbors(variable)
+        choices_eliminated = 0
+
+        if neighbors:
+            for neighbor in neighbors:
+                if neighbor not in assignment.keys() and value in self.domains[neighbor]:
+                    choices_eliminated += 1
+
+        print(value, choices_eliminated)
+        return choices_eliminated
+
     def order_domain_values(self, var, assignment):
         """
         Return a list of values in the domain of `var`, in order by
@@ -190,7 +209,9 @@ class CrosswordCreator():
         The first value in the list, for example, should be the one
         that rules out the fewest values among the neighbors of `var`.
         """
-        return list(self.domains[var])
+        domain_vals = sorted(list(self.domains[var]), key=lambda val: self.get_constraint(val, var, assignment), reverse=False)
+        print('-----------------------')
+        return domain_vals
 
     def select_unassigned_variable(self, assignment):
         """
@@ -200,11 +221,19 @@ class CrosswordCreator():
         degree. If there is a tie, any of the tied variables are acceptable
         return values.
         """
-        for var in self.crossword.variables:
-            if var not in assignment.keys():
-                return var
-        
-        return None
+
+        unassigned_vars: set = self.crossword.variables - assignment.keys()
+        current_choice = unassigned_vars.pop()
+
+        for var in unassigned_vars:
+            if len(self.domains[var]) < len(self.domains[current_choice]):
+                current_choice = var
+            # Tie
+            elif len(self.domains[var]) == len(self.domains[current_choice]):
+                if len(self.crossword.neighbors(var)) > len(self.crossword.neighbors(current_choice)):
+                    current_choice = var
+
+        return current_choice
 
     def backtrack(self, assignment):
         """
@@ -217,17 +246,18 @@ class CrosswordCreator():
         """
         if self.assignment_complete(assignment):
             return assignment
-        
+
         var = self.select_unassigned_variable(assignment)
         for val in self.order_domain_values(var, assignment):
-          new_assignment = assignment.copy()
-          new_assignment[var] = val
-          if self.consistent(new_assignment):
-            res = self.backtrack(new_assignment)
-            if res:
-              return res
-              
+            new_assignment = assignment.copy()
+            new_assignment[var] = val
+            if self.consistent(new_assignment):
+                res = self.backtrack(new_assignment)
+                if res:
+                    return res
+
         return None
+
 
 def main():
 
